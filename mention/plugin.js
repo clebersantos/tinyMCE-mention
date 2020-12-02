@@ -23,7 +23,7 @@
     } else {
       g = this;
     }
-    
+
     f(g.jQuery);
   }
 
@@ -66,6 +66,15 @@
                                 '<span id="autocomplete-delimiter">' + this.options.delimiter + '</span>' +
                                 '<span id="autocomplete-searchtext"><span class="dummy">\uFEFF</span></span>' +
                             '</span>';
+
+            var editorRange = this.editor.selection.getRng();
+            var node = editorRange.commonAncestorContainer;
+            var range = document.createRange();
+
+            range.selectNodeContents(node);
+            range.setStart(node, editorRange.endOffset - (this.options.delimiter.length - 1));
+            range.setEnd(node, editorRange.endOffset);
+            range.deleteContents();
 
             this.editor.execCommand('mceInsertContent', false, rawHtml);
             this.editor.focus();
@@ -336,7 +345,7 @@
                 if (!$selection.length) {
                     return;
                 }
-                    
+
                 var replacement = $('<p>' + this.options.delimiter + text + '</p>')[0].firstChild,
                     focus = $(this.editor.selection.getNode()).offset().top === ($selection.offset().top + (($selection.outerHeight() - $selection.height()) / 2));
 
@@ -382,6 +391,18 @@
             // If the delimiter is a string value convert it to an array. (backwards compatibility)
             autoCompleteData.delimiter = (autoCompleteData.delimiter !== undefined) ? !$.isArray(autoCompleteData.delimiter) ? [autoCompleteData.delimiter] : autoCompleteData.delimiter : ['@'];
 
+            function getPrevChar(length)
+            {
+                var start = ed.selection.getRng(true).startOffset,
+                    text = ed.selection.getRng(true).startContainer.data || '';
+
+                return text.substr(start - length, length);
+            }
+
+            function isMatched(char, delimiter) {
+                return (getPrevChar(delimiter.length) + char).trim() === delimiter.trim();
+            }
+
             function prevCharIsSpace() {
                 var start = ed.selection.getRng(true).startOffset,
                       text = ed.selection.getRng(true).startContainer.data || '',
@@ -391,16 +412,27 @@
             }
 
             ed.on('keypress', function (e) {
-                var delimiterIndex = $.inArray(String.fromCharCode(e.which || e.keyCode), autoCompleteData.delimiter);
-                if (delimiterIndex > -1 && prevCharIsSpace()) {
+                var char = String.fromCharCode(e.which || e.keyCode);
+
+                var delimiterIndex = autoCompleteData.delimiter.findIndex(function(el) {
+                    return el.includes(char);
+                });
+
+                if (delimiterIndex === -1) {
+                    return;
+                }
+
+                var delimiter = autoCompleteData.delimiter[delimiterIndex];
+
+                if (isMatched(char, delimiter)) {
                     if (autoComplete === undefined || (autoComplete.hasFocus !== undefined && !autoComplete.hasFocus)) {
                         e.preventDefault();
                         // Clone options object and set the used delimiter.
-                        autoComplete = new AutoComplete(ed, $.extend({}, autoCompleteData, { delimiter: autoCompleteData.delimiter[delimiterIndex] }));
+
+                        autoComplete = new AutoComplete(ed, $.extend({}, autoCompleteData, { delimiter: delimiter }));
                     }
                 }
             });
-
         },
 
         getInfo: function () {
@@ -413,5 +445,5 @@
     });
 
     tinymce.PluginManager.add('mention', tinymce.plugins.Mention);
-  
+
 });
